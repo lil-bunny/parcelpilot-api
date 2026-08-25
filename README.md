@@ -1,83 +1,111 @@
-# ParcelPilot — assessment backend
+# ParcelPilot API
 
-FastAPI + LangGraph: ReAct tool loop with auth-aware PostgreSQL facts, hybrid document search, service-credit calculation, and confirmation-gated actions.
+FastAPI + LangGraph support agent. Query in → model picks tools → ToolNode runs them → final answer with a `tool_trace`.
 
-## Setup
+Live API: `https://parcelpilot-api-cvki.onrender.com`  
+Health: `https://parcelpilot-api-cvki.onrender.com/v1/health`
+
+UI is a separate repo: [parcelpilot-ui](https://github.com/lil-bunny/parcelpilot-ui).
+
+## Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- An OpenAI API key
+- Postgres (Supabase **Session pooler** URI on port 5432 works; the direct `db.*.supabase.co` host is IPv6-only)
+
+## Run locally
 
 ```bash
+git clone https://github.com/lil-bunny/parcelpilot-api.git
+cd parcelpilot-api
 uv sync
-copy .env.example .env   # OPENAI_API_KEY + DATABASE_URL
+cp .env.example .env          # Windows: copy .env.example .env
 ```
 
-**DATABASE_URL tips:** If your password contains `@`, URL-encode it (`@` → `%40`). On Windows/IPv4-only networks, use the **Session pooler** URI from Supabase (Connect → Session mode, port 5432) — not the direct `db.*.supabase.co` string, which is IPv6-only.
+Edit `.env`:
 
-### Seed structured data (Excel → Postgres)
+```
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/postgres
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
 
-Drop `data/ParcelPilot_Assessment_Data.xlsx` into the repo, then:
+If the password contains `@ : / ? #`, URL-encode it (`@` → `%40`).
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+- API: http://127.0.0.1:8000
+- Health: http://127.0.0.1:8000/v1/health (`chroma_ready` is `true` after PDFs are ingested)
+- Docs: http://127.0.0.1:8000/docs
+
+### Optional: seed Postgres from Excel
+
+Put `ParcelPilot_Assessment_Data.xlsx` in `data/`, then:
 
 ```bash
 uv run python scripts/verify_schema.py
 uv run python scripts/seed_postgres.py
 ```
 
-### Document pack (hybrid search)
+### Optional: policy PDFs (hybrid search)
 
-Drop the six assignment PDFs into `artifacts/`, then:
+Put the six assignment PDFs in `artifacts/`, then:
 
 ```bash
-uv run python scripts/ingest_docs.py   # re-run after catalog.json changes
-uv run uvicorn app.main:app --reload
+uv run python scripts/ingest_docs.py
 ```
+
+Without PDFs, orders/tickets/escalation still work. Policy tools return empty until indexed.
+
+## Run with the UI
+
+In a second terminal, clone and start [parcelpilot-ui](https://github.com/lil-bunny/parcelpilot-ui):
+
+```bash
+git clone https://github.com/lil-bunny/parcelpilot-ui.git
+cd parcelpilot-ui
+npm install
+# leave VITE_API_BASE empty so Vite proxies /v1 → localhost:8000
+npm run dev
+```
+
+Open http://localhost:5173 — mock login `ACCT-001` / `demo`.
+
+## Smoke test (API only)
+
+```bash
+curl -s http://127.0.0.1:8000/v1/health
+curl -s http://127.0.0.1:8000/v1/tools
+curl -s -X POST http://127.0.0.1:8000/v1/chat/messages \
+  -H "Content-Type: application/json" \
+  -d "{\"thread_id\":\"t1\",\"text\":\"What is the status of ORD-1001?\",\"user_context\":{\"role\":\"customer\",\"account_id\":\"ACCT-001\"}}"
+```
+
+## Tests
 
 ```bash
 uv run pytest
 ```
 
-## API (for external UI)
-
-`POST /v1/chat/messages`
-
-```json
-{
-  "thread_id": "uuid",
-  "text": "Can I cancel ORD-1001 without a fee?",
-  "user_context": { "role": "customer", "account_id": "ACCT-001" }
-}
-```
-
-Response includes `text`, `tool_trace`, `confirmation_required`, `proposed_action`, `evidence`, `sources`, `conflicts`, `confidence`.
-
 ## Tools
 
 | Tool | Use for |
 |------|---------|
-| `query_operational_data` | Orders, accounts, tickets (PostgreSQL facts, auth-scoped) |
-| `get_applicable_rules` | Order-specific rules: Postgres order→account→contract_file, then filtered agreement + SOP |
-| `search_documents` | General policy/SLA/product docs (requires filters for customer agreements) |
+| `query_operational_data` | Orders, accounts, tickets (Postgres, auth-scoped) |
+| `get_applicable_rules` | Order-specific rules from agreement + SOP |
+| `search_documents` | General policy/SLA/product docs |
 | `calculate_service_credit` | Eligibility math from facts + evidence |
-| `create_escalation` / `update_ticket` / `create_followup` | Writes — require explicit user confirmation |
+| `create_escalation` / `update_ticket` / `create_followup` | Writes — need explicit user confirmation |
 
-## Architecture
-
-`model ⇄ tools` with action confirmation gate. Operational facts never come from vector search; policy text never comes from Postgres.
+Operational facts never come from vector search; policy text never comes from Postgres.
 
 ## Deploy on Render
 
-1. Push repo to GitHub; in Render: **New → Blueprint** and select `render.yaml`, or **New → Web Service** manually.
-2. Set **secret** env vars in the Render dashboard:
-   - `OPENAI_API_KEY`
-   - `DATABASE_URL` (Supabase **Session pooler** URI)
-3. Optional: `CORS_ORIGINS` — add your deployed MVP-UI URL (comma-separated).
-4. **Chroma / policy search:** drop the six PDFs into `artifacts/` before deploy so `render_build.sh` runs ingest at build time. Check `GET /v1/health` → `chroma_ready: true`.
-5. Without PDFs, the API still runs (orders, tickets, escalation); policy tools return empty until indexed.
+`render.yaml` is the blueprint.
 
-**Manual commands** (same as `render.yaml`):
-
-```bash
-# Build
-bash scripts/render_build.sh
-# Start
-uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
-
-**Persistent Chroma (optional):** attach a Render disk at `/var/data`, set `CHROMA_DIR=/var/data/chroma`, run ingest once via shell.
+1. Set secrets: `OPENAI_API_KEY`, `DATABASE_URL` (session pooler).
+2. Set `CORS_ORIGINS` to your UI origin(s), comma-separated (include `http://localhost:5173` for local UI).
+3. Drop PDFs into `artifacts/` before deploy if you want policy search (`GET /v1/health` → `chroma_ready: true`).
