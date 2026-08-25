@@ -1,0 +1,50 @@
+{
+  "01_Support_Policy_v3_CURRENT.pdf": {
+    "doc_id": "support_policy",
+    "version": "v3",
+    "status": "current",
+    "authority": 2,
+    "account_id": null,
+    "postgres_account_id": null
+  },
+  "02_Support_Policy_v2_DEPRECATED.pdf": {
+    "doc_id": "support_policy",
+    "version": "v2",
+    "status": "deprecated",
+    "authority": 1,
+    "account_id": null,
+    "postgres_account_id": null
+  },
+  "03_Cancellation_and_Service_Credit_SOP_v4.pdf": {
+    "doc_id": "cancellation_sop",
+    "version": "v4",
+    "status": "current",
+    "authority": 3,
+    "account_id": null,
+    "postgres_account_id": null
+  },
+  "04_Product_Operations_Guide_and_Known_Issues.pdf": {
+    "doc_id": "product_ops",
+    "version": "v1",
+    "status": "current",
+    "authority": 2,
+    "account_id": null,
+    "postgres_account_id": null
+  },
+  "05_Northstar_Logistics_Enterprise_Agreement.pdf": {
+    "doc_id": "northstar_agreement",
+    "version": "v1",
+    "status": "current",
+    "authority": 4,
+    "account_id": "northstar",
+    "postgres_account_id": "ACCT-001"
+  },
+  "06_LumenWorks_Service_Agreement.pdf": {
+    "doc_id": "lumenworks_agreement",
+    "version": "v1",
+    "status": "current",
+    "authority": 4,
+    "account_id": "lumenworks",
+    "postgres_account_id": "ACCT-002"
+  }
+}

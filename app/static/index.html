@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParcelPilot orchestrator</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, sans-serif; color: #111; background: #f6f6f4; }
+    body { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    textarea { width: 100%; min-height: 80px; padding: .6rem; }
+    button { margin-top: .5rem; padding: .4rem .8rem; }
+    .trace { margin: .5rem 0; }
+    .chip { display: inline-block; background: #e8eef8; border-radius: 999px; padding: .15rem .6rem; margin: .15rem; font-size: .85rem; }
+    .chip.ask { background: #f5ecd4; }
+    .msg.ask { border-color: #c9a227; }
+    .msg { background: #fff; border: 1px solid #ddd; padding: .75rem; margin: .75rem 0; white-space: pre-wrap; }
+    .muted { color: #666; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <h1>ParcelPilot — core orchestrator</h1>
+  <p class="muted">The agent picks tools from full chat history. Tools that ran show as chips.</p>
+  <p id="tools" class="muted">Loading tools…</p>
+  <textarea id="q" placeholder="Try: Can I cancel without a fee?"></textarea>
+  <div><button id="send">Send</button></div>
+  <div id="out"></div>
+  <script>
+    const threadId = crypto.randomUUID();
+    fetch("/v1/tools").then(r => r.json()).then(d => {
+      document.getElementById("tools").textContent =
+        "Registered: " + d.tools.map(t => t.name).join(", ");
+    });
+    document.getElementById("send").onclick = async () => {
+      const text = document.getElementById("q").value.trim();
+      if (!text) return;
+      const res = await fetch("/v1/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: threadId, text }),
+      });
+      const data = await res.json();
+      const div = document.createElement("div");
+      div.className = "msg";
+      if (!res.ok) {
+        div.textContent = data.detail || JSON.stringify(data);
+        document.getElementById("out").prepend(div);
+        return;
+      }
+      const chips = (data.tool_trace || []).map(t => {
+        const cls = t.ok ? "chip" : "chip err";
+        return `<span class="${cls}">${t.name}(${JSON.stringify(t.args)})</span>`;
+      }).join("") || "<span class='muted'>no tools</span>";
+      div.innerHTML = `<div class="trace">${chips}</div>${data.text || ""}`;
+      document.getElementById("out").prepend(div);
+    };
+  </script>
+</body>
+</html>

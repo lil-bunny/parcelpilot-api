@@ -1,0 +1,21 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Create service from repo: Dashboard → New → Blueprint → connect repo.
+services:
+  - type: web
+    name: parcelpilot-api
+    runtime: python
+    plan: starter
+    buildCommand: bash scripts/render_build.sh
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: LLM_MODEL
+        value: openai:gpt-4o-mini
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://127.0.0.1:5173
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

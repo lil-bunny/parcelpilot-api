@@ -1,0 +1,24 @@
+---
+description: ParcelPilot — LangGraph orchestrator, tool registry, FastAPI layers
+alwaysApply: true
+---
+
+# ParcelPilot (core)
+
+Python FastAPI + LangGraph. Query in → orchestrator sees registered tools → model picks tool calls → ToolNode runs them → loop until a final answer. Response includes a **tool_trace**.
+
+**Call chain:** `api → service → compiled graph → TOOL_REGISTRY handler`
+
+| Layer | Must | Must not |
+|-------|------|----------|
+| `app/api/` | validate, one service call | graph compile, SQL, business rules |
+| `app/services/` | orchestrate graph invoke + tool_trace | raw SQL |
+| `app/tools/` | `@tool` definition + register once | HTTP routes |
+| `app/workflows/` | StateGraph, ToolNode, pure routers | import api/tasks |
+| `app/domain/` | state types | import api/tasks |
+
+Add a tool: `app/tools/definitions/<name>.py` (`@tool` + docstring + type hints) then `register()` in `app/tools/registry.py`. No new graph nodes or routes.
+
+Routers are pure `state → str`. Nodes are thin. Search existing tools before adding.
+
+Tests live under `tests/unit/`, `tests/integrations/`, `tests/e2e/`.
